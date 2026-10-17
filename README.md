@@ -1,4 +1,4 @@
-# Gemini Usage Statusbar HUD
+# Gemini Usage Statusbar
 
 [中文](#chinese) | [English](#english)
 
