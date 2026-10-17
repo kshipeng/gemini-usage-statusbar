@@ -2240,7 +2240,7 @@
         }
 
         try {
-            // 1. 优先尝试跨账号共享 RPC 重放 (~80ms)
+            // 1. 优先尝试跨账号共享 RPC 重放
             const replayData = await tryCalibratedRpcReplay(ctx);
             if (replayData) {
                 publishUsageData(replayData);
