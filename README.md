@@ -19,10 +19,21 @@
 
 ### 📦 安装指南
 
-1. 在浏览器中安装 **Tampermonkey（暴力猴）** 或 **Violentmonkey** 插件。
-2. 新建脚本并将 `gemini-usage-statusbar.user.js` 源码完整粘贴进去并保存。
-3. 打开 [Google Gemini](https://gemini.google.com/) 即可在输入框左侧看到实时用量胶囊。
+您可以选择以下任一方式进行安装：
 
+#### 方式一：Greasy Fork 一键安装（推荐普通用户）
+1. 首先在浏览器中安装油猴管理插件：
+   * **Tampermonkey**（强烈推荐）
+   * **Violentmonkey**
+2. 前往 Greasy Fork 官方页面：[点击访问 Greasy Fork 详情页](https://greasyfork.org/zh-CN/scripts/600672-gemini-usage-statusbar-hud)
+3. 点击页面上的 **“安装此脚本”** 按钮即可，插件会自动接收后续的自动更新。
+
+#### 方式二：本地新建脚本安装（适合开发者/DIY）
+1. 确保浏览器已安装 Tampermonkey 或 Violentmonkey 插件。
+2. 在油猴面板中点击 **“添加新脚本”**。
+3. 将本仓库中 `gemini-usage-statusbar.user.js` 的完整源码复制并粘贴到编辑器中。
+4. 保存脚本（快捷键 `Ctrl + S` / `Cmd + S`），即可在 Gemini 页面立即生效。
+   
 ---
 
 <a name="english"></a>
@@ -40,9 +51,20 @@
 
 ### 📦 Installation
 
-1. Install a userscript manager such as **Tampermonkey** or **Violentmonkey** in your browser.
-2. Click [Install Script](#) (or create a new script and paste the source code).
-3. Open [Google Gemini](https://gemini.google.com/), and the usage HUD will automatically appear in the input bar.
+Choose either of the following methods to install the script:
+
+#### Method 1: Greasy Fork (Recommended for regular users)
+1. Install a userscript manager extension in your browser:
+   * **Tampermonkey** (Recommended)
+   * **Violentmonkey**
+2. Visit the script page on Greasy Fork: [Gemini Usage Statusbar HUD on Greasy Fork](https://greasyfork.org/zh-CN/scripts/600672-gemini-usage-statusbar-hud)
+3. Click the **"Install"** button. The extension will automatically handle future updates.
+
+#### Method 2: Local Manual Installation (Recommended for developers)
+1. Install **Tampermonkey** or **Violentmonkey** in your browser.
+2. Create a new userscript in your manager.
+3. Copy the entire source code from `gemini-usage-statusbar.user.js` in this repository and paste it into the editor.
+4. Save the script (`Ctrl + S` or `Cmd + S`), and it will take effect immediately on Gemini.
 
 ---
 
