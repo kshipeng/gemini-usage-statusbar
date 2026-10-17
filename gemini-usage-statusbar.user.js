@@ -4,6 +4,7 @@
 // @version      1.0.0
 // @description  极简微缩胶囊内嵌至 Gemini 状态栏，支持多账号一键全量并发同步、新登录账号自动探测、AF_initDataCallback 与 batchexecute 跨账号共享自校准。
 // @author       Kang & Gemini
+// @license      MIT
 // @match        https://gemini.google.com/*
 // @grant        GM_openInTab
 // @grant        GM_setValue
