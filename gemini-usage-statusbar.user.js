@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Usage Statusbar HUD
 // @namespace    https://gemini.google.com/
-// @version      1.0.2
+// @version      1.0.3
 // @description  极简微缩胶囊内嵌至 Gemini 状态栏，支持多账号一键全量并发同步、新登录账号自动探测、AF_initDataCallback 与 batchexecute 跨账号共享自校准。
 // @author       kshipeng & Gemini
 // @license      MIT
@@ -19,7 +19,7 @@
 (function () {
     'use strict';
 
-    const SCRIPT_VERSION = `v${(typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) ? GM_info.script.version : '1.0.2'}`;
+    const SCRIPT_VERSION = `v${(typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) ? GM_info.script.version : '1.0.3'}`;
     const STORAGE_PREFIX = 'gemini_usage_sync_payload_v38_';
     const REGISTRY_KEY = 'gemini_usage_multi_registry_v38';
     const SSR_PROFILE_KEY = 'gemini_usage_ssr_profile_v38';
@@ -152,7 +152,7 @@
     }
 
     // =========================================================================
-    // 1. 多账号全局注册表（支持跨会话合并与槽位自动刷新）
+    // 1. 多账号全局注册表
     // =========================================================================
     function readAccountRegistry() {
         const gmMap = readStore(REGISTRY_KEY, {}, true) || {};
@@ -201,24 +201,47 @@
     // =========================================================================
     function parseResetToEpoch(resetText, refTimeMs = Date.now()) {
         if (!resetText || typeof resetText !== 'string') return null;
-        const ref = new Date(refTimeMs);
+        const timeMatch = resetText.match(/(\d{1,2}):(\d{2})/);
+        if (!timeMatch) return null;
 
-        const mdhmMatch = resetText.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2}):(\d{2})/);
-        if (mdhmMatch) {
-            const target = new Date(ref.getFullYear(), parseInt(mdhmMatch[1], 10) - 1, parseInt(mdhmMatch[2], 10), parseInt(mdhmMatch[3], 10), parseInt(mdhmMatch[4], 10), 0, 0);
+        let hour = parseInt(timeMatch[1], 10);
+        const min = parseInt(timeMatch[2], 10);
+        if (/\bpm\b|下午/i.test(resetText) && hour < 12) hour += 12;
+        else if (/\bam\b|上午/i.test(resetText) && hour === 12) hour = 0;
+
+        const ref = new Date(refTimeMs);
+        const zhDate = resetText.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+        const enDate = !zhDate && (
+            resetText.match(/\b([a-z]{3})[a-z]*\s+(\d{1,2})\b/i) ||
+            resetText.match(/\b(\d{1,2})\s+([a-z]{3})[a-z]*\b/i)
+        );
+
+        let month = null, day = null;
+        if (zhDate) {
+            month = parseInt(zhDate[1], 10) - 1;
+            day = parseInt(zhDate[2], 10);
+        } else if (enDate) {
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const mStr = isNaN(enDate[1]) ? enDate[1] : enDate[2];
+            const dStr = isNaN(enDate[1]) ? enDate[2] : enDate[1];
+            const mIdx = months.indexOf(mStr.toLowerCase().slice(0, 3));
+            if (mIdx !== -1) {
+                month = mIdx;
+                day = parseInt(dStr, 10);
+            }
+        }
+
+        if (month !== null && day !== null) {
+            const target = new Date(ref.getFullYear(), month, day, hour, min, 0, 0);
             if (target.getTime() < refTimeMs - 86400000 * 30) target.setFullYear(target.getFullYear() + 1);
             return target.getTime();
         }
 
-        const hmMatch = resetText.match(/(\d{1,2}):(\d{2})/);
-        if (hmMatch) {
-            const target = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), parseInt(hmMatch[1], 10), parseInt(hmMatch[2], 10), 0, 0);
-            if (/明天|明日|tomorrow/i.test(resetText) || target.getTime() <= refTimeMs - 60000) {
-                target.setDate(target.getDate() + 1);
-            }
-            return target.getTime();
+        const target = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), hour, min, 0, 0);
+        if (/明天|明日|tomorrow/i.test(resetText) || target.getTime() <= refTimeMs - 60000) {
+            target.setDate(target.getDate() + 1);
         }
-        return null;
+        return target.getTime();
     }
 
     function calcRemainingParts(targetMs) {
@@ -286,27 +309,26 @@
             }
 
             let resetText = '重置时间：--';
-            let rawClock = '';
             for (const leaf of rootEl.querySelectorAll('span, p, div')) {
                 if (leaf.childElementCount === 0) {
                     const t = (leaf.textContent || '').trim();
                     if (/重置时间|Reset/i.test(t)) {
                         resetText = t;
-                        const tp = t.match(/[：:]\s*(.+)$/);
-                        if (tp) rawClock = tp[1].trim();
                         break;
                     }
                 }
             }
             if (resetText === '重置时间：--') {
-                const fallbackMatch = rawText.match(/(重置时间\s*[：:]\s*[^\n]+)/);
+                const fallbackMatch = rawText.match(/(?:重置时间\s*[：:]|Resets?\s*)[^\n]+/i);
                 if (fallbackMatch) {
-                    resetText = fallbackMatch[1].replace(/已使用.*$/, '').trim();
-                    const tp = resetText.match(/[：:]\s*(.+)$/);
-                    if (tp) rawClock = tp[1].trim();
+                    resetText = fallbackMatch[0].replace(/已使用.*$/, '').trim();
                 }
             }
-            return { pct, resetText, rawClock, resetAt: parseResetToEpoch(resetText, nowMs) };
+            const resetAt = parseResetToEpoch(resetText, nowMs);
+            const tp = resetText.match(/(?:重置时间\s*[：:]|Resets?\s*(?:at\s*)?)\s*(.+)$/i);
+            const rawClock = formatEpochToRawClock(resetAt) || (tp ? tp[1].trim() : '');
+
+            return { pct, resetText, rawClock, resetAt };
         };
 
         const current = parseSection(curNode);
@@ -555,7 +577,7 @@
     }
 
     // =========================================================================
-    // 模式 A：/usage 子页面 Worker 模式（捕获 RPC + 校准 SSR）
+    // 模式 A：/usage 子页面 Worker 模式
     // =========================================================================
     if (isUsagePage) {
         const params = new URLSearchParams(window.location.search);
@@ -634,7 +656,7 @@
     }
 
     // =========================================================================
-    // 模式 B：Gemini 聊天主页面（全量多账号并发同步引擎 + 同屏对比列表）
+    // 模式 B：Gemini 聊天主页面
     // =========================================================================
     if (window.self !== window.top) return;
 
@@ -672,7 +694,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // 宿主 1：极简微缩胶囊 (pillHost)
+    // 宿主 1：微缩胶囊
     // -------------------------------------------------------------------------
     const pillHost = el('div', {
         id: 'gemini-usage-pill-host',
@@ -726,7 +748,7 @@
                 .metric-val.level-warn { color: #c26401; }
                 .metric-val.level-danger { color: #c5221f; }
             }
-            .countdown-inline { opacity: 0.68; font-size: 10.5px; font-variant-numeric: tabular-nums; margin-left: 1px; }
+            .countdown-inline { opacity: 0.85; font-size: 10.5px; font-variant-numeric: tabular-nums; margin-left: 1px; }
             .sep { opacity: 0.3; font-size: 10px; margin: 0 1px; }
             .bottom-progress {
                 position: absolute; left: 0; bottom: 0; height: 2px; background: #6dd58c;
@@ -757,7 +779,7 @@
     pillShadow.append(pillStyle, pill);
 
     // -------------------------------------------------------------------------
-    // 宿主 2：顶层弹窗宿主 (popoverHost)
+    // 宿主 2：顶层弹窗宿主
     // -------------------------------------------------------------------------
     const popoverHost = el('div', {
         id: 'gemini-usage-popover-portal',
@@ -1136,6 +1158,8 @@
         const refTs = data.timestamp || Date.now();
         if (!data.current.resetAt && data.current.resetText) data.current.resetAt = parseResetToEpoch(data.current.resetText, refTs);
         if (!data.weekly.resetAt && data.weekly.resetText) data.weekly.resetAt = parseResetToEpoch(data.weekly.resetText, refTs);
+        if (data.current.resetAt) data.current.rawClock = formatEpochToRawClock(data.current.resetAt);
+        if (data.weekly.resetAt) data.weekly.rawClock = formatEpochToRawClock(data.weekly.resetAt);
 
         lastMetricsData = data;
         const curPct = data.current.pct;
@@ -1185,7 +1209,7 @@
             const nextCompact = formatUltraCompactCountdown(cur.resetAt);
             if (curCountdownText.textContent !== nextCompact) {
                 curCountdownText.textContent = nextCompact;
-                curCountdownText.style.color = nextCompact === '已重置' ? '#6dd58c' : '';
+                curCountdownText.style.color = nextCompact === '已重置' ? '#34a853' : '';
             }
             if (isPopOpen) curCard.reset.textContent = formatDetailedCountdown(cur.resetAt, cur.rawClock);
         }
@@ -1198,7 +1222,7 @@
                 if (ts) {
                     const s = formatUltraCompactCountdown(ts);
                     node.textContent = s ? `(${s})` : '';
-                    node.style.color = s === '已重置' ? '#6dd58c' : '';
+                    node.style.color = s === '已重置' ? '#34a853' : '';
                 }
             }
         }
@@ -1288,7 +1312,7 @@
     }
 
     // =========================================================================
-    // 5. 跨账号共享 RPC 协议重放 + Promise 化单实例微透明 Iframe 水合器
+    // 5. 跨账号共享 RPC 协议重放 + 微透明 Iframe 水合器
     // =========================================================================
     let isSyncing = false;
     let isBatchSyncing = false;
@@ -1583,7 +1607,7 @@
     }
 
     // =========================================================================
-    // 6. 全量多账号并发探测与同步引擎 (`triggerAllAccountsSync`)
+    // 6. 全量多账号并发探测与同步引擎
     // =========================================================================
     async function probeSlotHtmlAndContext(slotIdx) {
         try {
@@ -1676,7 +1700,7 @@
     }
 
     // =========================================================================
-    // 7. O(1) 状态栏挂载与精准提问发送拦截（排除模型切换器）
+    // 7. O(1) 状态栏挂载与精准提问发送拦截
     // =========================================================================
     let mountScheduled = false;
 
@@ -1716,7 +1740,6 @@
         sendDebounceTimer = setTimeout(() => triggerUsageSync(false), delayMs);
     }
 
-    // 监测“停止生成”按钮从出现到消失，精准判定回答输出完毕
     let answerWatchTimer = null;
     function waitForAnswerCompletion() {
         if (!config.refreshOnSend) return;
@@ -1734,12 +1757,10 @@
             if (isGenerating) {
                 seenGenerating = true;
             } else if (seenGenerating) {
-                // 生成状态已结束（回答完成或手动中止），触发配额刷新
                 clearInterval(answerWatchTimer);
                 answerWatchTimer = null;
                 schedulePostSendRefresh(1200);
             } else if (elapsed > 10000) {
-                // 10秒内未进入生成态（未发出请求或已被 XHR loadend 捕获），结束轮询
                 clearInterval(answerWatchTimer);
                 answerWatchTimer = null;
             }
